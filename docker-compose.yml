@@ -1,0 +1,220 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: stateflow-postgres
+    environment:
+      POSTGRES_DB: stateflow
+      POSTGRES_USER: stateflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stateflow_dev_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d/migrations
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stateflow -d stateflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - stateflow-network
+
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: stateflow-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: stateflow
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-stateflow_dev_password}
+      RABBITMQ_DEFAULT_VHOST: stateflow
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - stateflow-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: stateflow-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - stateflow-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: stateflow-backend
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://stateflow:stateflow_dev_password@postgres:5432/stateflow
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://stateflow:stateflow_dev_password@rabbitmq:5672/stateflow
+      - CELERY_BROKER_URL=amqp://stateflow:stateflow_dev_password@rabbitmq:5672/stateflow
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - REFRESH_TOKEN_EXPIRE_DAYS=7
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - stateflow-network
+    command: >
+      sh -c "alembic upgrade head || true && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  # Celery Worker
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: stateflow-worker
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://stateflow:stateflow_dev_password@postgres:5432/stateflow
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://stateflow:stateflow_dev_password@rabbitmq:5672/stateflow
+      - CELERY_BROKER_URL=amqp://stateflow:stateflow_dev_password@rabbitmq:5672/stateflow
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - ALGORITHM=HS256
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - stateflow-network
+    command: >
+      sh -c "celery -A app.workers.tasks.celery_app worker --loglevel=INFO --concurrency=4"
+
+  # Celery Beat (Scheduler)
+  scheduler:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: stateflow-scheduler
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://stateflow:stateflow_dev_password@postgres:5432/stateflow
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://stateflow:stateflow_dev_password@rabbitmq:5672/stateflow
+      - CELERY_BROKER_URL=amqp://stateflow:stateflow_dev_password@rabbitmq:5672/stateflow
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - ALGORITHM=HS256
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - stateflow-network
+    command: >
+      sh -c "celery -A app.workers.tasks.celery_app beat --loglevel=INFO"
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: stateflow-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - stateflow-network
+
+  # Grafana Visualization
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: stateflow-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning/dashboards/StateFlow:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/provisioning/dashboards/dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - stateflow-network
+
+  # Node Exporter for system metrics
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: stateflow-node-exporter
+    # On Windows Docker Desktop, use a different approach for host metrics
+    # The --path.rootfs=/host with /:/host:ro,rslave doesn't work on Windows
+    # Running without rootfs still provides container-level metrics
+    command:
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($|/)'
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    networks:
+      - stateflow-network
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  stateflow-network:
+    driver: bridge

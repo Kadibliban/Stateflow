@@ -1,0 +1,242 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import 'reactflow/dist/style.css';
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 199 89% 48%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 199 89% 48%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 199 89% 48%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 199 89% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* React Flow custom styles */
+.react-flow__node {
+  transition: box-shadow 0.2s ease;
+}
+
+.react-flow__node.selected {
+  box-shadow: 0 0 0 2px #0ea5e9;
+}
+
+.react-flow__handle {
+  background: #0ea5e9;
+  border: 2px solid white;
+}
+
+.react-flow__handle.connecting {
+  background: #22c55e;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2;
+  transition: stroke 0.2s ease;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #0ea5e9;
+}
+
+/* Custom node styles */
+.workflow-node {
+  @apply bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-3 min-w-[180px] max-w-[250px];
+}
+
+.workflow-node.selected {
+  @apply border-primary-500 shadow-lg;
+}
+
+.workflow-node-header {
+  @apply flex items-center justify-between mb-2;
+}
+
+.workflow-node-type {
+  @apply text-xs font-medium px-2 py-0.5 rounded-full;
+}
+
+.workflow-node-type.action {
+  @apply bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200;
+}
+
+.workflow-node-type.condition {
+  @apply bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200;
+}
+
+.workflow-node-type.parallel {
+  @apply bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200;
+}
+
+.workflow-node-type.delay {
+  @apply bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200;
+}
+
+.workflow-node-type.compensation {
+  @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
+}
+
+.workflow-node-content {
+  @apply space-y-1 text-sm;
+}
+
+.workflow-node-label {
+  @apply font-medium text-gray-900 dark:text-gray-100;
+}
+
+.workflow-node-description {
+  @apply text-gray-500 dark:text-gray-400 line-clamp-2;
+}
+
+.workflow-node-status {
+  @apply inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full;
+}
+
+.workflow-node-status.pending {
+  @apply bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300;
+}
+
+.workflow-node-status.running {
+  @apply bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 animate-pulse;
+}
+
+.workflow-node-status.completed {
+  @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200;
+}
+
+.workflow-node-status.failed {
+  @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
+}
+
+.workflow-node-status.compensating {
+  @apply bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 animate-pulse;
+}
+
+.workflow-node-status.compensated {
+  @apply bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200;
+}
+
+/* Execution timeline */
+.timeline-item {
+  @apply relative pl-6 pb-6 border-l-2 border-gray-200 dark:border-gray-700;
+}
+
+.timeline-item:last-child {
+  @apply border-l-transparent;
+}
+
+.timeline-item.completed .timeline-dot {
+  @apply bg-green-500;
+}
+
+.timeline-item.failed .timeline-dot {
+  @apply bg-red-500;
+}
+
+.timeline-item.running .timeline-dot {
+  @apply bg-blue-500 animate-pulse;
+}
+
+.timeline-item.pending .timeline-dot {
+  @apply bg-gray-400;
+}
+
+.timeline-dot {
+  @apply absolute left-0 top-1 w-3 h-3 rounded-full border-2 border-white dark:border-gray-900;
+}
+
+/* Status badges */
+.status-badge {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.status-badge.pending {
+  @apply bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300;
+}
+
+.status-badge.running {
+  @apply bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200;
+}
+
+.status-badge.completed {
+  @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200;
+}
+
+.status-badge.failed {
+  @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
+}
+
+.status-badge.compensating {
+  @apply bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200;
+}
+
+.status-badge.compensated {
+  @apply bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200;
+}
+
+.status-badge.cancelled {
+  @apply bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300;
+}
+
+.status-badge.timed_out {
+  @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200;
+}

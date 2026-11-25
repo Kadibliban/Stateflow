@@ -1,0 +1,256 @@
+groups:
+  - name: stateflow-backend-alerts
+    interval: 30s
+    rules:
+      # Backend availability
+      - alert: BackendDown
+        expr: up{job="stateflow-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "StateFlow Backend is down"
+          description: "Backend has been down for more than 1 minute"
+
+      - alert: BackendHighLatency
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="stateflow-backend"}[5m])) by (le)) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backend high latency (p95 > 1s)"
+          description: "Backend p95 latency is above 1 second for 5 minutes"
+
+      - alert: BackendHighErrorRate
+        expr: sum(rate(http_requests_total{job="stateflow-backend", status=~"5.."}[5m])) / sum(rate(http_requests_total{job="stateflow-backend"}[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend high error rate (>5%)"
+          description: "Backend 5xx error rate is above 5% for 2 minutes"
+
+      - alert: BackendHighMemoryUsage
+        expr: (process_resident_memory_bytes{job="stateflow-backend"} / 1024 / 1024) > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backend high memory usage"
+          description: "Backend memory usage is above 500MB"
+
+  - name: stateflow-database-alerts
+    interval: 30s
+    rules:
+      - alert: DatabaseDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL database is down"
+          description: "Database has been down for more than 1 minute"
+
+      - alert: DatabaseHighConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "Database connections are above 80% of max"
+
+      - alert: DatabaseSlowQueries
+        expr: rate(pg_stat_database_blks_read[5m]) > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database high disk read rate"
+          description: "Database is reading from disk at high rate, possible missing indexes"
+
+  - name: stateflow-worker-alerts
+    interval: 30s
+    rules:
+      - alert: WorkerDown
+        expr: up{job="stateflow-worker"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Celery worker is down"
+          description: "Worker has been down for more than 1 minute"
+
+      - alert: WorkerQueueBacklog
+        expr: sum by (queue) (celery_queue_length) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Worker queue backlog growing"
+          description: "Queue {{ $labels.queue }} has more than 100 pending tasks"
+
+      - alert: WorkerTaskFailures
+        expr: rate(celery_tasks_failed_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Worker task failure rate high"
+          description: "Task failure rate is above 0.1/sec"
+
+      - alert: WorkerHighMemoryUsage
+        expr: (process_resident_memory_bytes{job="stateflow-worker"} / 1024 / 1024) > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Worker high memory usage"
+          description: "Worker memory usage is above 1GB"
+
+  - name: stateflow-redis-alerts
+    interval: 30s
+    rules:
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "Redis has been down for more than 1 minute"
+
+      - alert: RedisHighMemoryUsage
+        expr: (redis_memory_used_bytes / redis_memory_max_bytes) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage critical"
+          description: "Redis memory usage is above 90%"
+
+      - alert: RedisHighConnectedClients
+        expr: redis_connected_clients > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis high client connections"
+          description: "Redis has more than 1000 connected clients"
+
+  - name: stateflow-rabbitmq-alerts
+    interval: 30s
+    rules:
+      - alert: RabbitMQDown
+        expr: up{job="rabbitmq"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RabbitMQ is down"
+          description: "RabbitMQ has been down for more than 1 minute"
+
+      - alert: RabbitMQQueueBacklog
+        expr: rabbitmq_queue_messages_ready > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RabbitMQ queue backlog"
+          description: "Queue {{ $labels.queue }} has more than 1000 ready messages"
+
+      - alert: RabbitMQNoConsumers
+        expr: rabbitmq_queue_consumers == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RabbitMQ queue has no consumers"
+          description: "Queue {{ $labels.queue }} has no consumers for 2 minutes"
+
+  - name: stateflow-system-alerts
+    interval: 30s
+    rules:
+      - alert: HostHighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host CPU usage high"
+          description: "CPU usage on {{ $labels.instance }} is above 80%"
+
+      - alert: HostHighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host memory usage high"
+          description: "Memory usage on {{ $labels.instance }} is above 85%"
+
+      - alert: HostDiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host disk space low"
+          description: "Disk space on {{ $labels.instance }} is below 10%"
+
+      - alert: HostHighLoad
+        expr: node_load1 > 2 * count(node_cpu_seconds_total{mode="system"})
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host load average high"
+          description: "Load average on {{ $labels.instance }} is high"
+
+  - name: stateflow-workflow-alerts
+    interval: 60s
+    rules:
+      - alert: WorkflowExecutionFailuresHigh
+        expr: rate(stateflow_workflow_executions_failed_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Workflow execution failure rate high"
+          description: "Workflow execution failure rate is above 5%"
+
+      - alert: WorkflowExecutionQueueBacklog
+        expr: stateflow_workflow_executions_pending > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Workflow execution queue backlog"
+          description: "More than 50 workflow executions pending"
+
+      - alert: WorkflowCompensationTriggered
+        expr: rate(stateflow_compensation_executions_total[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Compensation executions triggered"
+          description: "Compensations are being triggered at a rate of {{ $value }}/sec"
+
+      - alert: WorkflowStepRetriesHigh
+        expr: rate(stateflow_step_executions_retried_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High step execution retry rate"
+          description: "Step executions are being retried at high rate"
+
+      - alert: SagaTimeoutHigh
+        expr: rate(stateflow_saga_timeouts_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Saga timeouts occurring"
+          description: "Sagas are timing out at rate {{ $value }}/sec"
